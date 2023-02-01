@@ -1,0 +1,20 @@
+{
+    "name": null,
+    "seed": 43,
+    "cuda": 0,
+    "dataset": "G200",
+    "total_timesteps": 100000,
+    "lr": 0.0003,
+    "mha_layers": 3,
+    "embed_dim": 32,
+    "num_heads": 4,
+    "logit_scale": 10,
+    "load": "",
+    "load_step": -1,
+    "num_instances": 16,
+    "num_test": 100,
+    "pomo": 10,
+    "pomo_entropy": 0.001,
+    "save_interval": 100,
+    "debug": false
+}
