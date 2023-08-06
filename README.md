@@ -1,6 +1,22 @@
 # Learning to Solve Grouped 2D Bin Packing Problems in Manufacturing Industry
 
-This repo contains the source code and datasets for our KDD'23 ADS track paper under review.
+This repo contains the source code and datasets for our [KDD'23 paper](https://dl.acm.org/doi/pdf/10.1145/3580305.3599860).
+
+<img src="./imgs/Cover.png" width="100%"/>
+
+Please cite us as:
+```bibtex
+@inproceedings{Ao2023,
+  doi = {10.1145/3580305.3599860},
+  url = {https://doi.org/10.1145/3580305.3599860},
+  year = {2023},
+  month = aug,
+  publisher = {{ACM}},
+  author = {Wenxuan Ao and Guozhen Zhang and Yong Li and Depeng Jin},
+  title = {Learning to Solve Grouped 2D Bin Packing Problems in the Manufacturing Industry},
+  booktitle = {Proceedings of the 29th {ACM} {SIGKDD} Conference on Knowledge Discovery and Data Mining}
+}
+```
 
 ## Requirements
 
