@@ -71,6 +71,7 @@ class Environment():
             self.plan = [[map_[j] for j in i] for i in bins]
         else:
             self.plan = deepcopy(plan)
+        self.detail = self.detail_b = None
 
     def _init_get(self):
         g1 = self.orders
@@ -132,6 +133,7 @@ class Environment():
         if self.usage_avg > self.usage_avg_b:
             self.plan_b = deepcopy(self.plan)
             self.usage_b = deepcopy(self.usage)
+            self.detail_b = deepcopy(self.detail)
             self.usage_avg_b = self.usage_avg
         if self.use_incumbent_reward:
             reward = max(0, self.usage_avg - self.usage_best)
@@ -205,7 +207,7 @@ def get_feasible_actions(order_parts, plan, max_parts, x1, x2):
 
 
 class EnvironmentGroup():
-    def __init__(self, envs, lower_method, lower_model, lower_pomo, lower_batch, lower_records, lower_detail=None):
+    def __init__(self, envs, lower_method, lower_model, lower_pomo, lower_batch, keep_detail=False):
         self.envs = envs
         env: Environment = envs[0]
         self.device = env.device
@@ -219,13 +221,15 @@ class EnvironmentGroup():
             raise NotImplementedError
         self.lower_method = lower_method
         self.lower_model = lower_model
-        self.lower_detail = lower_detail
-        self.lower_records = lower_records
+        self.keep_detail = keep_detail
         self.lower_pomo = lower_pomo
         self.lower_batch = lower_batch
         bps = self._usage_multiple([j for i in envs for j in i._init_get()])
         for i, e in enumerate(envs):
             e._init_set(*bps[i * 2:i * 2 + 2])
+            if keep_detail:
+                e.detail = self._sols[i * 2 + 1]
+                e.detail_b = deepcopy(e.detail)
 
     def observe(self):
         return [i.observe() for i in self.envs]
@@ -233,9 +237,15 @@ class EnvironmentGroup():
     def step(self, actions):
         for i, j in zip(self.envs, actions):
             i.step(j)
+        us = self._usage_multiple([i._step_get() for i in self.envs])
+        if self.keep_detail:
+            for i, j in zip(self.envs, self._sols):
+                x1, x2 = i._step_save
+                i.detail[x1] = j[0]
+                i.detail[x2] = j[1]
         reward, obs, done = transpose([
             i._step_set(j)
-            for i, j in zip(self.envs, self._usage_multiple([i._step_get() for i in self.envs]))
+            for i, j in zip(self.envs, us)
         ])
         return (
             torch.tensor(reward, dtype=torch.float32, device=self.device),
@@ -244,25 +254,32 @@ class EnvironmentGroup():
         )
 
     def _usage(self, batch):
-        bps = [bp_shelf(self.perm_parts(i)) for i in batch]
+        sols = [self.perm_parts(i) for i in batch]
+        bps = [bp_shelf(i) for i in sols]
         if self.lower_method == 'RL':
             to_handle = [[i, j, k] for i, (j, k) in enumerate(zip(bps, batch)) if sum(j) < len(j) - 1]
-            if self.lower_detail is not None:
-                self.lower_detail.extend([parts, bp, None] for parts, bp in zip(batch, bps) if sum(bp) >= len(bp) - 1)
-            bps2 = to_handle and self.lower_model.pomo_batch([i[2] for i in to_handle], K=self.lower_pomo, sample=False, batch_size=self.lower_batch)
-            for (i, bp, parts), bp2 in zip(to_handle, bps2):
-                if self.lower_records is not None:
-                    self.lower_records.append([len(bp), len(bp2)])
-                if self.lower_detail is not None:
-                    self.lower_detail.append([parts, bp, bp2])
-                if len(bp2) < len(bp):
-                    bps[i] = bp2
+            if to_handle:
+                if self.keep_detail:
+                    bps2 = self.lower_model.pomo_batch([i[2] for i in to_handle], K=self.lower_pomo, sample=False, batch_size=self.lower_batch)
+                    for (i, bp, _), bp2 in zip(to_handle, bps2):
+                        if len(bp2) < len(bp):
+                            bps[i] = bp2
+                else:
+                    bps2, sols2 = self.lower_model.pomo_batch([i[2] for i in to_handle], K=self.lower_pomo, sample=False, batch_size=self.lower_batch, return_sol=True)
+                    for (i, bp, _), bp2, sol2 in zip(to_handle, bps2, sols2):
+                        print(sol2)
+                        if len(bp2) < len(bp):
+                            bps[i] = bp2
+                            sols[i] = sol2
+        self._sols = sols
         return bps
 
     def _usage_multiple(self, arr):
         # assert all(type(i) is list for i in arr)
         l = [0] + np.cumsum([len(i) for i in arr]).tolist()
         bps = self._usage(sum(arr, []))
+        if self.keep_detail:
+            self._sols = [self._sols[i:j] for i, j in zip(l, l[1:])]
         return [bps[i:j] for i, j in zip(l, l[1:])]
 
     def get_mean_usage(self):
@@ -588,7 +605,6 @@ def main():
                     lower_model=lower_model,
                     lower_pomo=args.lower_pomo,
                     lower_batch=args.lower_batch,
-                    lower_records=None,
                 )
                 init_bins = env.get_total_bins()
                 obs = [None] * args.num_steps

@@ -9,7 +9,7 @@ from copy import deepcopy
 import torch
 from tqdm import tqdm
 
-from train_upper import (Model, Environment, EnvironmentGroup, load_lower,
+from train_upper import (Environment, EnvironmentGroup, Model, load_lower,
                          transpose)
 
 
@@ -97,8 +97,6 @@ def main():
         lower_model=lower_model,
         lower_pomo=opts.lower_pomo,
         lower_batch=opts.lower_batch,
-        lower_records=None,
-        lower_detail=None,
     )
     usages = []
     log = [[deepcopy(i.orders) for i in env.envs], usages]
@@ -106,7 +104,7 @@ def main():
     with torch.no_grad():
         for _ in tqdm(range(opts.steps)):
             usages.append(transpose([[deepcopy(i.usage), deepcopy(i.plan)] for i in env.envs]))
-            action = model.get_action_and_value(next_obs, sample=True, action_only=True)
+            action = model.get_action_and_value(next_obs, sample=opts.sample, action_only=True)
             reward, next_obs, next_done = env.step(action)
     with open(f'{name}.log', 'w') as f:
         end_time = time.time()
